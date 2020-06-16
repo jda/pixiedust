@@ -55,8 +55,6 @@ func main() {
 	}
 
 	/*
-		need to extract http streams https://github.com/google/gopacket/blob/master/examples/httpassembly/main.go
-		default runmode: track/harvest secrets
 		extra: pull config info
 	*/
 
