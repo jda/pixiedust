@@ -5,11 +5,12 @@ package main
 import (
 	"flag"
 	"fmt"
+	"log"
 	"os"
-	"time"
+	"runtime/pprof"
+	"sync"
 
 	"github.com/google/gopacket"
-	"github.com/google/gopacket/examples/util"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcapgo"
 	"github.com/google/gopacket/tcpassembly"
@@ -20,8 +21,20 @@ func init() {
 }
 
 func main() {
-	fname := flag.CommandLine.String("in", "", "input file name (pcap)")
+	var wg sync.WaitGroup
+
+	cpuprofile := flag.String("cpuprofile", "", "write cpu profile to file")
+	fname := flag.String("in", "", "input file name (pcap)")
 	flag.Parse()
+
+	if *cpuprofile != "" {
+		f, err := os.Create(*cpuprofile)
+		if err != nil {
+			log.Fatal(err)
+		}
+		pprof.StartCPUProfile(f)
+		defer pprof.StopCPUProfile()
+	}
 
 	if *fname == "" {
 		fmt.Println("error: no input file")
@@ -47,17 +60,20 @@ func main() {
 		extra: pull config info
 	*/
 
-	defer util.Run()()
+	readStream(&wg, r)
+	wg.Wait()
+}
+
+func readStream(wg *sync.WaitGroup, r *pcapgo.Reader) {
 
 	// Set up assembly
-	streamFactory := &httpStreamFactory{}
+	streamFactory := &httpStreamFactory{wg}
 	streamPool := tcpassembly.NewStreamPool(streamFactory)
 	assembler := tcpassembly.NewAssembler(streamPool)
 
 	// Read in packets, pass to assembler.
 	packetSource := gopacket.NewPacketSource(r, layers.LayerTypeEthernet)
 	packets := packetSource.Packets()
-	ticker := time.Tick(time.Minute)
 	for {
 		select {
 		case packet := <-packets:
@@ -67,15 +83,11 @@ func main() {
 			}
 
 			if packet.NetworkLayer() == nil || packet.TransportLayer() == nil || packet.TransportLayer().LayerType() != layers.LayerTypeTCP {
-				// log.Println("Unusable packet")
 				continue
 			}
+
 			tcp := packet.TransportLayer().(*layers.TCP)
 			assembler.AssembleWithTimestamp(packet.NetworkLayer().NetworkFlow(), tcp, packet.Metadata().Timestamp)
-
-		case <-ticker:
-			// Every minute, flush connections that haven't seen activity in the past 2 minutes.
-			assembler.FlushOlderThan(time.Now().Add(time.Minute * -2))
 		}
 	}
 }

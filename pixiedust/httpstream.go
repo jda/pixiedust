@@ -3,12 +3,9 @@ package main
 import (
 	"bufio"
 	"bytes"
-	"encoding/json"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
-	"strings"
 	"sync"
 
 	"github.com/golang/glog"
@@ -18,27 +15,21 @@ import (
 	"github.com/jda/nanofi/inform"
 )
 
-type informMsg struct {
-	Type    string `json:"_type"`
-	MgmtCfg string `json:"mgmt_cfg"`
-	AuthKey string
-}
-
-// SafeKeys is safe to use concurrently.
-type SafeKeys struct {
+// SafeUniqueList is safe to use concurrently.
+type SafeUniqueList struct {
 	v   []string
 	mux sync.RWMutex
 }
 
 // Keys returns list of keys
-func (sk *SafeKeys) Keys() []string {
+func (sk *SafeUniqueList) Keys() []string {
 	sk.mux.RLock()
 	defer sk.mux.RUnlock()
 	return sk.v
 }
 
 // AddKey adds a unique key to sk
-func (sk *SafeKeys) AddKey(key string) {
+func (sk *SafeUniqueList) AddKey(key string) {
 	sk.mux.Lock()
 	defer sk.mux.Unlock()
 
@@ -51,12 +42,28 @@ func (sk *SafeKeys) AddKey(key string) {
 	sk.v = append(sk.v, key)
 }
 
-var sk SafeKeys
+// Exists returns true if key exists in list
+func (sk *SafeUniqueList) Exists(key string) bool {
+	sk.mux.RLock()
+	defer sk.mux.RUnlock()
+
+	for _, k := range sk.v {
+		if key == k {
+			return true
+		}
+	}
+
+	return false
+}
+
+var sk SafeUniqueList
 
 // Build a simple HTTP request parser using tcpassembly.StreamFactory and tcpassembly.Stream interfaces
 
 // httpStreamFactory implements tcpassembly.StreamFactory
-type httpStreamFactory struct{}
+type httpStreamFactory struct {
+	wg *sync.WaitGroup
+}
 
 // httpStream will handle the actual decoding of http requests.
 type httpStream struct {
@@ -70,23 +77,28 @@ func (h *httpStreamFactory) New(net, transport gopacket.Flow) tcpassembly.Stream
 		transport: transport,
 		r:         tcpreader.NewReaderStream(),
 	}
-	go hstream.run() // Important... we must guarantee that data from the reader stream is read.
+	go hstream.run(h.wg) // Important... we must guarantee that data from the reader stream is read.
 
 	// ReaderStream implements tcpassembly.Stream, so we can return a pointer to it.
 	return &hstream.r
 }
 
-func (h *httpStream) run() {
+func (h *httpStream) run(wg *sync.WaitGroup) {
 	// read entire flow
 	data, err := ioutil.ReadAll(&h.r)
 	if err != nil {
-		glog.Fatalf("failed to read entire stream: %s", err)
+		glog.Errorf("failed to read entire stream: %s", err)
 		return
 	}
+	h.r.Close()
+
 	buf := bufio.NewReader(bytes.NewReader(data))
 
 	src := h.net.Src().String()
 	dest := h.net.Dst().String()
+
+	wg.Add(1)
+	defer wg.Done()
 
 	// try to read request
 	req, err := http.ReadRequest(buf)
@@ -173,31 +185,4 @@ func tryDecodePayload(imsg inform.Header, eb io.ReadCloser) (clearBody []byte, e
 	}
 
 	return nil, err
-}
-
-func extractInfo(payload []byte, src string) {
-	var im informMsg
-	payload = []byte(strings.ReplaceAll(string(payload), "\\n", ","))
-	fmt.Printf("%s\n\n", payload)
-	json.Unmarshal(payload, &im)
-
-	if im.Type == "setparam" {
-		chunks := strings.Split(im.MgmtCfg, ",")
-		for _, c := range chunks {
-			parts := strings.Split(c, "=")
-			if len(parts) != 2 {
-				continue
-			}
-
-			if parts[0] == "authkey" {
-				im.AuthKey = parts[1]
-				sk.AddKey(im.AuthKey)
-				fmt.Printf("discovered key: %s for %s\n", im.AuthKey, src)
-				break
-			}
-		}
-	}
-
-	// harvest location from APs
-
 }
