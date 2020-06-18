@@ -41,6 +41,10 @@ type Neighbor struct {
 var located SafeUniqueList
 
 func extractInfo(payload []byte, src string) {
+	if showMsg {
+		fmt.Printf("%s\n", payload)
+	}
+
 	var im informMsg
 	payload = []byte(strings.ReplaceAll(string(payload), "\\n", ","))
 	json.Unmarshal(payload, &im)
@@ -62,7 +66,7 @@ func extractInfo(payload []byte, src string) {
 		}
 	}
 
-	if im.RadioTable != nil {
+	if showCoords == true && im.RadioTable != nil {
 		updateGeo(im)
 	}
 }

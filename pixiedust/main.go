@@ -3,6 +3,7 @@
 package main
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
 	"log"
@@ -10,6 +11,7 @@ import (
 	"runtime/pprof"
 	"sync"
 
+	"github.com/golang/glog"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcapgo"
@@ -20,11 +22,37 @@ func init() {
 	flag.Set("logtostderr", "true")
 }
 
+var showHeader bool
+var showMsg bool
+var showCoords bool
+
+func loadKeys(keyfname string) error {
+	file, err := os.Open(keyfname)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		sk.AddKey(scanner.Text())
+	}
+
+	if err := scanner.Err(); err != nil {
+		return err
+	}
+	return nil
+}
+
 func main() {
 	var wg sync.WaitGroup
 
 	cpuprofile := flag.String("cpuprofile", "", "write cpu profile to file")
 	fname := flag.String("in", "", "input file name (pcap)")
+	flag.BoolVar(&showHeader, "header", false, "show inform header")
+	flag.BoolVar(&showMsg, "message", false, "show config message")
+	flag.BoolVar(&showCoords, "locate", false, "geolocate devices")
+	keyfname := flag.String("keys", "", "file of keys")
 	flag.Parse()
 
 	if *cpuprofile != "" {
@@ -47,6 +75,13 @@ func main() {
 		os.Exit(1)
 	}
 	defer f.Close()
+
+	if *keyfname != "" {
+		err = loadKeys(*keyfname)
+		if err != nil {
+			glog.Errorf("could not read keys from %s: %s", *keyfname, err)
+		}
+	}
 
 	r, err := pcapgo.NewReader(f)
 	if err != nil {
