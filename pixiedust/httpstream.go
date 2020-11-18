@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -157,9 +158,13 @@ func handleInform(body io.ReadCloser, src string, dest string) {
 		return
 	}
 
+	if showHeader {
+		fmt.Printf("%s->%s: %+v\n", src, dest, imsg)
+	}
+
 	payload, err := tryDecodePayload(imsg, body)
 	if err != nil {
-		glog.Infof("%s->%s: could not decrypt inform payload", src, dest)
+		glog.Infof("%s->%s: could not decrypt inform payload: %s", src, dest, err)
 		return
 	}
 	extractInfo(payload, dest) // dest because keys come in responses

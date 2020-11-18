@@ -62,7 +62,7 @@ func extractInfo(payload []byte, src string) {
 		}
 	}
 
-	if im.RadioTable != nil && quiet != true {
+	if showCoords == true && im.RadioTable != nil {
 		updateGeo(im)
 	}
 }

@@ -17,27 +17,26 @@ import (
 	"github.com/google/gopacket/tcpassembly"
 )
 
-var quiet = false
-var geo = false
-
 func init() {
 	flag.Set("logtostderr", "true")
 }
+
+var showHeader bool
+var showMsg bool
+var showCoords bool
+var showKeys bool
 
 func main() {
 	var wg sync.WaitGroup
 
 	cpuprofile := flag.String("cpuprofile", "", "write cpu profile to file")
 	fname := flag.String("in", "", "input file name (pcap)")
-	keyFile := flag.String("keys", "", "file containing known keys")
-	keyOut := flag.Bool("findkeys", false, "extracts keys from pcap (and suppress other output)")
-
+	flag.BoolVar(&showHeader, "header", false, "show inform header")
+	flag.BoolVar(&showMsg, "message", false, "show config message")
+	flag.BoolVar(&showCoords, "locate", false, "geolocate devices")
+	flag.BoolVar(&showKeys, "findkeys", false, "show keys")
+	keyfname := flag.String("keys", "", "read keys from file")
 	flag.Parse()
-
-	if *keyOut {
-		flag.Set("logtostderr", "false")
-		quiet = true
-	}
 
 	if *cpuprofile != "" {
 		f, err := os.Create(*cpuprofile)
@@ -59,31 +58,30 @@ func main() {
 	}
 	defer f.Close()
 
+	if *keyfname != "" {
+		err = loadKeys(*keyfname)
+		if err != nil {
+			glog.Errorf("could not read keys from %s: %s", *keyfname, err)
+		}
+	}
+
 	r, err := pcapgo.NewReader(f)
 	if err != nil {
 		glog.Fatalf("cannot parse: %s", err)
 	}
 
-	if *keyFile != "" {
-		// load keys from file
-		err = loadKeys(*keyFile)
-		if err != nil {
-			glog.Errorf("could not load keys from %s: %s", *keyFile, err)
-		}
-	}
-
 	readStream(&wg, r)
 	wg.Wait()
 
-	if *keyOut {
+	if showKeys {
 		for _, v := range sk.v {
 			fmt.Println(v)
 		}
 	}
 }
 
-func loadKeys(kf string) error {
-	f, err := os.Open(kf)
+func loadKeys(keyfname string) error {
+	f, err := os.Open(keyfname)
 	if err != nil {
 		return err
 	}
@@ -93,6 +91,9 @@ func loadKeys(kf string) error {
 	s.Split(bufio.ScanLines)
 	for s.Scan() {
 		sk.v = append(sk.v, s.Text())
+	}
+	if err := s.Err(); err != nil {
+		return err
 	}
 
 	return nil
