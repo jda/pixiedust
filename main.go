@@ -32,7 +32,7 @@ func main() {
 	cpuprofile := flag.String("cpuprofile", "", "write cpu profile to file")
 	fname := flag.String("in", "", "input file name (pcap)")
 	flag.BoolVar(&showHeader, "header", false, "show inform header")
-	flag.BoolVar(&showMsg, "message", false, "show config message")
+	flag.BoolVar(&showMsg, "message", true, "show config message")
 	flag.BoolVar(&showCoords, "locate", false, "geolocate devices")
 	flag.BoolVar(&showKeys, "findkeys", false, "show keys")
 	keyfname := flag.String("keys", "", "read keys from file")
