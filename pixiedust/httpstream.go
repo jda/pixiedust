@@ -164,7 +164,7 @@ func handleInform(body io.ReadCloser, src string, dest string) {
 	}
 	extractInfo(payload, dest) // dest because keys come in responses
 	// unmarshal here and harvest keys
-	//glog.Infof("%s->%s\n%s\n\n", src, dest, payload)
+	glog.Infof("%s->%s\n%s\n\n", src, dest, payload)
 
 }
 

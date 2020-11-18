@@ -3,18 +3,22 @@
 package main
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
-	"log"
 	"os"
 	"runtime/pprof"
 	"sync"
 
+	"github.com/golang/glog"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcapgo"
 	"github.com/google/gopacket/tcpassembly"
 )
+
+var quiet = false
+var geo = false
 
 func init() {
 	flag.Set("logtostderr", "true")
@@ -25,12 +29,20 @@ func main() {
 
 	cpuprofile := flag.String("cpuprofile", "", "write cpu profile to file")
 	fname := flag.String("in", "", "input file name (pcap)")
+	keyFile := flag.String("keys", "", "file containing known keys")
+	keyOut := flag.Bool("findkeys", false, "extracts keys from pcap (and suppress other output)")
+
 	flag.Parse()
+
+	if *keyOut {
+		flag.Set("logtostderr", "false")
+		quiet = true
+	}
 
 	if *cpuprofile != "" {
 		f, err := os.Create(*cpuprofile)
 		if err != nil {
-			log.Fatal(err)
+			glog.Fatal(err)
 		}
 		pprof.StartCPUProfile(f)
 		defer pprof.StopCPUProfile()
@@ -43,23 +55,47 @@ func main() {
 
 	f, err := os.Open(*fname)
 	if err != nil {
-		fmt.Printf("error: cannot open input: %s\n", err)
-		os.Exit(1)
+		glog.Fatalf("cannot open input: %s", err)
 	}
 	defer f.Close()
 
 	r, err := pcapgo.NewReader(f)
 	if err != nil {
-		fmt.Printf("error: cannot parse: %s\n", err)
-		os.Exit(1)
+		glog.Fatalf("cannot parse: %s", err)
 	}
 
-	/*
-		extra: pull config info
-	*/
+	if *keyFile != "" {
+		// load keys from file
+		err = loadKeys(*keyFile)
+		if err != nil {
+			glog.Errorf("could not load keys from %s: %s", *keyFile, err)
+		}
+	}
 
 	readStream(&wg, r)
 	wg.Wait()
+
+	if *keyOut {
+		for _, v := range sk.v {
+			fmt.Println(v)
+		}
+	}
+}
+
+func loadKeys(kf string) error {
+	f, err := os.Open(kf)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	s := bufio.NewScanner(f)
+	s.Split(bufio.ScanLines)
+	for s.Scan() {
+		sk.v = append(sk.v, s.Text())
+	}
+
+	return nil
 }
 
 func readStream(wg *sync.WaitGroup, r *pcapgo.Reader) {

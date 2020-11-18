@@ -56,13 +56,13 @@ func extractInfo(payload []byte, src string) {
 			if parts[0] == "authkey" {
 				im.AuthKey = parts[1]
 				sk.AddKey(im.AuthKey)
-				fmt.Printf("discovered key: %s for %s\n", im.AuthKey, src)
+				glog.Infof("discovered key: %s for %s\n", im.AuthKey, src)
 				break
 			}
 		}
 	}
 
-	if im.RadioTable != nil {
+	if im.RadioTable != nil && quiet != true {
 		updateGeo(im)
 	}
 }
@@ -76,7 +76,7 @@ func updateGeo(im informMsg) {
 
 	pdKey := os.Getenv("PD_MAPS_API_KEY")
 	if pdKey == "" {
-		glog.Info("not geolocating because no API Key")
+		glog.Info("not geolocating because no API Key, set google maps key in env PD_MAPS_API_KEY")
 		return
 	}
 
