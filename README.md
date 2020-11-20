@@ -48,3 +48,22 @@ Device E063DA85AAC5 at 37.532993,-121.998439 (125.000000)
 Device E063DA85AAC5 at 37.532977,-121.998488 (60.000000)
 Device E063DA85AAC5 at 37.532987,-121.998509 (101.000000)
 ```
+
+## Need keys and don't want to wait for an adopt?
+Here's an example of how you'd retrieve current keys from UniFi controller's database:
+```
+admin@unifi:~$ mongo 127.0.0.1:27117/ace
+MongoDB shell version v3.6.8
+connecting to: mongodb://127.0.0.1:27117/ace
+Implicit session: session { "id" : UUID("b29aa101-e19d-42c6-86f0-bfe0be52af81") }
+MongoDB server version: 3.6.8
+Server has startup warnings:
+2020-11-09T22:48:24.711+0000 I CONTROL  [initandlisten]
+2020-11-09T22:48:24.712+0000 I CONTROL  [initandlisten] ** WARNING: Access control is not enabled for the database.
+2020-11-09T22:48:24.712+0000 I CONTROL  [initandlisten] **          Read and write access to data and configuration is unrestricted.
+2020-11-09T22:48:24.712+0000 I CONTROL  [initandlisten]
+>  db.device.find({}, {x_authkey:1, _id: 0})
+{ "x_authkey" : "0d90127a28666c197a1d1798258a2036" }
+>
+bye
+```
