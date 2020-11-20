@@ -85,38 +85,49 @@ func (h *httpStreamFactory) New(net, transport gopacket.Flow) tcpassembly.Stream
 }
 
 func (h *httpStream) run(wg *sync.WaitGroup) {
-	// read entire flow
-	data, err := ioutil.ReadAll(&h.r)
-	if err != nil {
-		glog.Errorf("failed to read entire stream: %s", err)
-		return
-	}
-	h.r.Close()
-
-	buf := bufio.NewReader(bytes.NewReader(data))
+	wg.Add(1)
+	buf := bufio.NewReader(&h.r)
 
 	src := h.net.Src().String()
 	dest := h.net.Dst().String()
 
-	wg.Add(1)
-	defer wg.Done()
+	for {
+		hint, err := buf.Peek(4)
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			glog.Fatalf("could not read packet: %s", err)
+		}
 
-	// try to read request
-	req, err := http.ReadRequest(buf)
-	if err == nil {
-		decodeRequest(req, src, dest)
-		req.Body.Close()
-		return
-	}
+		if bytes.Equal(hint, []byte("POST")) {
+			req, err := http.ReadRequest(buf)
+			if err != nil {
+				glog.Warningf("%s->%s: could not read request: %s", src, dest, err)
+				continue
+			}
 
-	// or response
-	buf.Reset(bytes.NewReader(data))
-	res, err := http.ReadResponse(buf, nil)
-	if err == nil {
-		decodeResponse(res, src, dest)
-		res.Body.Close()
-		return
+			decodeRequest(req, src, dest)
+			req.Body.Close()
+			continue
+		}
+
+		if bytes.Equal(hint, []byte("HTTP")) {
+			res, err := http.ReadResponse(buf, nil)
+			if err != nil {
+				glog.Warningf("%s->%s: could not read response: %s", src, dest, err)
+				continue
+			}
+
+			decodeResponse(res, src, dest)
+			res.Body.Close()
+			continue
+		}
+
+		buf.Discard(4) // hint failed, so skip forward
+		glog.Warning("unhandled packet with peek: %s", hint)
 	}
+	glog.Info("done with stream")
+	wg.Done()
 }
 
 func decodeResponse(r *http.Response, src string, dest string) {
@@ -130,12 +141,14 @@ func decodeResponse(r *http.Response, src string, dest string) {
 		return
 	}
 
-	if r.StatusCode == http.StatusOK && r.Header.Get("Content-type") == inform.InformContentType {
+	ctype := r.Header.Get("Content-type")
+	if r.StatusCode == http.StatusOK && ctype == inform.InformContentType {
+		glog.Info("handling inform response")
 		handleInform(r.Body, src, dest)
 		return
 	}
 
-	glog.Warningf("unhandled code %d from %s\n", r.StatusCode, dest)
+	glog.Warningf("unhandled code %d or content-type %s from %s\n", r.StatusCode, ctype, dest)
 
 }
 
@@ -144,7 +157,8 @@ func decodeRequest(r *http.Request, src string, dest string) {
 		return
 	}
 
-	if r.Header.Get("Content-type") != inform.InformContentType {
+	if ctype := r.Header.Get("Content-type"); ctype != inform.InformContentType {
+		glog.Infof("%s->%s: unexpected content-type: %s", src, dest, ctype)
 		return
 	}
 
@@ -161,11 +175,13 @@ func handleInform(body io.ReadCloser, src string, dest string) {
 	if showHeader {
 		fmt.Printf("%s->%s: %+v\n", src, dest, imsg)
 	}
+	if imsg.PayloadLength == 365 {
+		glog.Error("found target header")
+	}
 
 	payload, err := tryDecodePayload(imsg, body)
 	if err != nil {
 		glog.Warningf("%s->%s: could not decrypt inform payload: %s", src, dest, err)
-		//glog.Infof("%s->%s: could not decrypt inform payload %s\nheader: %+v", src, dest, err, imsg)
 		return
 	}
 	if showMsg {
@@ -188,10 +204,6 @@ func tryDecodePayload(imsg inform.Header, eb io.ReadCloser) (clearBody []byte, e
 		if err == nil {
 			return payload, nil
 		}
-	}
-
-	if err != nil {
-		glog.Infof("failed to decrypt payload with known keys:\nheader: %+v\n payload: %+v", imsg, ct)
 	}
 
 	return nil, err
