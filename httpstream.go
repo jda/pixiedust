@@ -164,7 +164,8 @@ func handleInform(body io.ReadCloser, src string, dest string) {
 
 	payload, err := tryDecodePayload(imsg, body)
 	if err != nil {
-		glog.Infof("%s->%s: could not decrypt inform payload: %s", src, dest, err)
+		glog.Warningf("%s->%s: could not decrypt inform payload: %s", src, dest, err)
+		//glog.Infof("%s->%s: could not decrypt inform payload %s\nheader: %+v", src, dest, err, imsg)
 		return
 	}
 	if showMsg {
@@ -187,6 +188,10 @@ func tryDecodePayload(imsg inform.Header, eb io.ReadCloser) (clearBody []byte, e
 		if err == nil {
 			return payload, nil
 		}
+	}
+
+	if err != nil {
+		glog.Infof("failed to decrypt payload with known keys:\nheader: %+v\n payload: %+v", imsg, ct)
 	}
 
 	return nil, err
