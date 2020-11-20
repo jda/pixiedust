@@ -85,7 +85,6 @@ func (h *httpStreamFactory) New(net, transport gopacket.Flow) tcpassembly.Stream
 }
 
 func (h *httpStream) run(wg *sync.WaitGroup) {
-	wg.Add(1)
 	buf := bufio.NewReader(&h.r)
 
 	src := h.net.Src().String()
@@ -124,10 +123,7 @@ func (h *httpStream) run(wg *sync.WaitGroup) {
 		}
 
 		buf.Discard(4) // hint failed, so skip forward
-		glog.Warning("unhandled packet with peek: %s", hint)
 	}
-	glog.Info("done with stream")
-	wg.Done()
 }
 
 func decodeResponse(r *http.Response, src string, dest string) {
@@ -143,7 +139,6 @@ func decodeResponse(r *http.Response, src string, dest string) {
 
 	ctype := r.Header.Get("Content-type")
 	if r.StatusCode == http.StatusOK && ctype == inform.InformContentType {
-		glog.Info("handling inform response")
 		handleInform(r.Body, src, dest)
 		return
 	}
@@ -174,9 +169,6 @@ func handleInform(body io.ReadCloser, src string, dest string) {
 
 	if showHeader {
 		fmt.Printf("%s->%s: %+v\n", src, dest, imsg)
-	}
-	if imsg.PayloadLength == 365 {
-		glog.Error("found target header")
 	}
 
 	payload, err := tryDecodePayload(imsg, body)
