@@ -36,7 +36,7 @@ I1120 00:11:43.163105   13121 extraction.go:59] discovered key: 0ee876dee74ff09c
 
 Geolocate WiFi APs by scan data (and suppress inform request/response so you don't miss it): 
 ```
-$ export PD_MAPS_API_KEY=your_key_here
+$ export PD_MAPS_API_KEY=your_google_maps_key_here
 $ ./pixiedust -in locinform.pcap -locate -message=false
 Device E063DA85AAC5 at 37.533223,-121.998402 (32.000000)
 Device E063DA85AAC5 at 37.533154,-121.998379 (122.000000)
