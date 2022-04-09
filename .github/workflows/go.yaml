@@ -23,7 +23,3 @@ jobs:
 
     - name: Test
       run: go test -v ./...
-© 2022 GitHub, Inc.
-Terms
-Privacy
-Security
