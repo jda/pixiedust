@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"sync"
 
@@ -183,7 +182,7 @@ func handleInform(body io.ReadCloser, src string, dest string) {
 }
 
 func tryDecodePayload(imsg inform.Header, eb io.ReadCloser) (clearBody []byte, err error) {
-	ct, _ := ioutil.ReadAll(eb)
+	ct, _ := io.ReadAll(eb)
 
 	payload, err := imsg.DecodePayload(bytes.NewReader(ct), "")
 	if err == nil {
