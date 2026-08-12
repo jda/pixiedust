@@ -4,10 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"strings"
 
-	"github.com/golang/glog"
 	"googlemaps.github.io/maps"
 )
 
@@ -56,7 +56,7 @@ func extractInfo(payload []byte, src string) {
 			if parts[0] == "authkey" {
 				im.AuthKey = parts[1]
 				sk.AddKey(im.AuthKey)
-				glog.Infof("discovered key: %s for %s\n", im.AuthKey, src)
+				slog.Info("discovered key", "auth_key", im.AuthKey, "device", src)
 				break
 			}
 		}
@@ -76,7 +76,7 @@ func updateGeo(im informMsg) {
 
 	pdKey := os.Getenv("PD_MAPS_API_KEY")
 	if pdKey == "" {
-		glog.Info("not geolocating because no API Key, set google maps key in env PD_MAPS_API_KEY")
+		slog.Info("geolocation disabled because no API key is configured", "environment_variable", "PD_MAPS_API_KEY")
 		return
 	}
 
@@ -89,13 +89,13 @@ func updateGeo(im informMsg) {
 
 	mc, err := maps.NewClient(maps.WithAPIKey(pdKey))
 	if err != nil {
-		glog.Errorf("could not init maps client: %s", err)
+		slog.Error("could not initialize Google Maps client", "err", err)
 		return
 	}
 
 	gr, err := mc.Geolocate(context.Background(), &gRec)
 	if err != nil {
-		glog.Errorf("could not geolocation device %s: %s", im.Serial, err)
+		slog.Error("could not geolocate device", "serial", im.Serial, "err", err)
 		return
 	}
 

@@ -6,20 +6,16 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
+	"log/slog"
 	"os"
 	"runtime/pprof"
 	"sync"
 
-	"github.com/golang/glog"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcapgo"
 	"github.com/google/gopacket/tcpassembly"
 )
-
-func init() {
-	flag.Set("logtostderr", "true")
-}
 
 var showHeader bool
 var showMsg bool
@@ -36,38 +32,44 @@ func main() {
 	flag.BoolVar(&showCoords, "locate", false, "geolocate devices")
 	flag.BoolVar(&showKeys, "findkeys", false, "show keys")
 	keyfname := flag.String("keys", "", "read keys from file")
+	var logLevel slog.Level
+	flag.TextVar(&logLevel, "log-level", slog.LevelInfo, "minimum log level (debug, info, warn, error)")
 	flag.Parse()
+	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: logLevel})))
 
 	if *cpuprofile != "" {
 		f, err := os.Create(*cpuprofile)
 		if err != nil {
-			glog.Fatal(err)
+			slog.Error("could not create CPU profile", "path", *cpuprofile, "err", err)
+			os.Exit(1)
 		}
 		pprof.StartCPUProfile(f)
 		defer pprof.StopCPUProfile()
 	}
 
 	if *fname == "" {
-		fmt.Println("error: no input file")
+		slog.Error("no input file")
 		os.Exit(1)
 	}
 
 	f, err := os.Open(*fname)
 	if err != nil {
-		glog.Fatalf("cannot open input: %s", err)
+		slog.Error("cannot open input", "path", *fname, "err", err)
+		os.Exit(1)
 	}
 	defer f.Close()
 
 	if *keyfname != "" {
 		err = loadKeys(*keyfname)
 		if err != nil {
-			glog.Errorf("could not read keys from %s: %s", *keyfname, err)
+			slog.Error("could not read keys", "path", *keyfname, "err", err)
 		}
 	}
 
 	r, err := pcapgo.NewReader(f)
 	if err != nil {
-		glog.Fatalf("cannot parse: %s", err)
+		slog.Error("cannot parse input", "path", *fname, "err", err)
+		os.Exit(1)
 	}
 
 	readStream(&wg, r)

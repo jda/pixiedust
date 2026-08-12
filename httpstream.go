@@ -5,10 +5,11 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
+	"os"
 	"sync"
 
-	"github.com/golang/glog"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/tcpassembly"
 	"github.com/google/gopacket/tcpassembly/tcpreader"
@@ -94,13 +95,14 @@ func (h *httpStream) run(wg *sync.WaitGroup) {
 		if err == io.EOF {
 			break
 		} else if err != nil {
-			glog.Fatalf("could not read packet: %s", err)
+			slog.Error("could not read packet", "source", src, "destination", dest, "err", err)
+			os.Exit(1)
 		}
 
 		if bytes.Equal(hint, []byte("POST")) {
 			req, err := http.ReadRequest(buf)
 			if err != nil {
-				glog.Warningf("%s->%s: could not read request: %s", src, dest, err)
+				slog.Warn("could not read HTTP request", "source", src, "destination", dest, "err", err)
 				continue
 			}
 
@@ -112,7 +114,7 @@ func (h *httpStream) run(wg *sync.WaitGroup) {
 		if bytes.Equal(hint, []byte("HTTP")) {
 			res, err := http.ReadResponse(buf, nil)
 			if err != nil {
-				glog.Warningf("%s->%s: could not read response: %s", src, dest, err)
+				slog.Warn("could not read HTTP response", "source", src, "destination", dest, "err", err)
 				continue
 			}
 
@@ -142,7 +144,7 @@ func decodeResponse(r *http.Response, src string, dest string) {
 		return
 	}
 
-	glog.Warningf("unhandled code %d or content-type %s from %s\n", r.StatusCode, ctype, dest)
+	slog.Warn("unhandled HTTP response", "status_code", r.StatusCode, "content_type", ctype, "source", src, "destination", dest)
 
 }
 
@@ -152,7 +154,7 @@ func decodeRequest(r *http.Request, src string, dest string) {
 	}
 
 	if ctype := r.Header.Get("Content-type"); ctype != inform.InformContentType {
-		glog.Infof("%s->%s: unexpected content-type: %s", src, dest, ctype)
+		slog.Info("unexpected HTTP request content type", "source", src, "destination", dest, "content_type", ctype)
 		return
 	}
 
@@ -162,7 +164,7 @@ func decodeRequest(r *http.Request, src string, dest string) {
 func handleInform(body io.ReadCloser, src string, dest string) {
 	imsg, err := inform.DecodeHeader(body)
 	if err != nil {
-		glog.Warningf("%s: could not parse inform header: %s", src, err)
+		slog.Warn("could not parse inform header", "source", src, "destination", dest, "err", err)
 		return
 	}
 
@@ -172,7 +174,7 @@ func handleInform(body io.ReadCloser, src string, dest string) {
 
 	payload, err := tryDecodePayload(imsg, body)
 	if err != nil {
-		glog.Warningf("%s->%s: could not decrypt inform payload: %s", src, dest, err)
+		slog.Warn("could not decrypt inform payload", "source", src, "destination", dest, "err", err)
 		return
 	}
 	if showMsg {
